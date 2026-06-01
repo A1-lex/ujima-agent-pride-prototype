@@ -14,6 +14,14 @@ streamlit run app.py
 
 The app runs in deterministic template mode by default so it stays stable for deployment.
 
+The deployed demo now uses a Flow-first orchestration layer in [ujima_flow.py](ujima_flow.py) and exposes an execution trace in the UI.
+
+You can also run the sample evaluator locally:
+
+```bash
+python evaluate_flow.py
+```
+
 To enable live CrewAI/OpenAI outputs on Streamlit Community Cloud, add these secrets in the app settings:
 
 ```toml

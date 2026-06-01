@@ -6,7 +6,8 @@ from dataclasses import asdict
 
 import streamlit as st
 
-from prototype import CASES_DIR, load_case, run_case
+from prototype import CASES_DIR, load_case
+from ujima_flow import run_case_with_flow
 
 
 st.set_page_config(
@@ -141,11 +142,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("Sample cases", len(sample_files))
 m2.metric("Deployment mode", "Live")
 m3.metric("Current engine", "CrewAI / OpenAI" if LIVE_LLM_MODE else "Template mode")
 m4.metric("Human override", "Enabled")
+m5.metric("Orchestration", "Flow-first")
 
 st.markdown("### Agent Roles")
 c1, c2, c3 = st.columns(3)
@@ -289,7 +291,7 @@ if submitted:
         "message": message,
     }
 
-    result = run_case(case)
+    result, flow_state = run_case_with_flow(case)
     result_dict = asdict(result)
 
     st.subheader("Decision Summary")
@@ -328,8 +330,11 @@ if submitted:
         st.write("**Welfare rule:** sensitive cases require human review")
         st.write("**Tone rule:** no humiliating denial language")
         st.write(f"**Mode:** {'live CrewAI/OpenAI mode' if LIVE_LLM_MODE else 'deterministic / stable demo mode'}")
+        st.write(f"**Flow state ID:** {flow_state.get('id', 'Not available')}")
 
-    t1, t2, t3 = st.tabs(["Decision Path", "Agent Outputs", "Raw JSON / Download"])
+    t1, t2, t3, t4 = st.tabs(
+        ["Decision Path", "Agent Outputs", "Execution Trace", "Raw JSON / Download"]
+    )
 
     with t1:
         st.markdown("#### Workflow Path")
@@ -372,12 +377,42 @@ if submitted:
             st.code(result.hunter_output, language="text")
 
     with t3:
+        st.markdown("#### Flow Execution Trace")
+        trace = flow_state.get("trace", [])
+        if trace:
+            for i, item in enumerate(trace, start=1):
+                st.write(f"**{i}. {item.get('step', 'step')}**")
+                st.write(f"- status: {item.get('status', 'unknown')}")
+                st.write(f"- details: {item.get('details', '')}")
+        else:
+            st.write("No trace available.")
+
+        st.markdown("#### Audit Notes")
+        audit_notes = flow_state.get("audit_notes", [])
+        if audit_notes:
+            for note in audit_notes:
+                st.write(f"- {note}")
+        else:
+            st.write("- none")
+
+    with t4:
+        st.markdown("#### Result JSON")
         st.json(result_dict)
+
+        st.markdown("#### Flow State JSON")
+        st.json(flow_state)
 
         st.download_button(
             label="Download result JSON",
             data=json.dumps(result_dict, indent=2, ensure_ascii=False),
             file_name=f"{member_name.lower().replace(' ', '_')}_ujima_result.json",
+            mime="application/json",
+        )
+
+        st.download_button(
+            label="Download flow state JSON",
+            data=json.dumps(flow_state, indent=2, ensure_ascii=False, default=str),
+            file_name=f"{member_name.lower().replace(' ', '_')}_ujima_flow_state.json",
             mime="application/json",
         )
 
