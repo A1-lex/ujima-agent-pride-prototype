@@ -6,8 +6,10 @@ from dataclasses import asdict
 
 import streamlit as st
 
+from explanations import explain_risk_flags, overall_explanation
 from prototype import CASES_DIR, load_case
 from ujima_flow import apply_human_review_decision, run_case_with_flow
+from review_store import export_review_history_json, fetch_review_history, save_review_record
 
 
 st.set_page_config(
@@ -43,6 +45,18 @@ if "latest_review_action" not in st.session_state:
 
 if "latest_review_note" not in st.session_state:
     st.session_state.latest_review_note = None
+
+
+def render_stat_card(label: str, value: str) -> None:
+    st.markdown(
+        f"""
+        <div class="stat-card">
+            <div class="stat-label">{label}</div>
+            <div class="stat-value">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ---------- Styling ----------
 st.markdown(
@@ -93,6 +107,35 @@ st.markdown(
     .small-note {
         font-size: 0.92rem;
         color: #4B5563;
+    }
+    .stat-card {
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid rgba(15, 118, 110, 0.14);
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        min-height: 88px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .stat-label {
+        font-size: 0.85rem;
+        color: #4b5563;
+        margin-bottom: 0.35rem;
+    }
+    .stat-value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        line-height: 1.15;
+        color: #111827;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        min-width: 0;
+    }
+    .stat-card * {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
     </style>
     """,
@@ -158,12 +201,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Sample cases", len(sample_files))
-m2.metric("Deployment mode", "Live")
-m3.metric("Current engine", "CrewAI / OpenAI" if LIVE_LLM_MODE else "Template mode")
-m4.metric("Human override", "Enabled")
-m5.metric("Orchestration", "Flow-first")
+top_row_left, top_row_mid, top_row_right = st.columns(3)
+with top_row_left:
+    render_stat_card("Sample cases", str(len(sample_files)))
+with top_row_mid:
+    render_stat_card("Deployment mode", "Live")
+with top_row_right:
+    render_stat_card("Current engine", "CrewAI / OpenAI" if LIVE_LLM_MODE else "Template fallback")
+
+bottom_row_left, bottom_row_right = st.columns(2)
+with bottom_row_left:
+    render_stat_card("Human override", "Enabled")
+with bottom_row_right:
+    render_stat_card("Orchestration", "Flow-first")
 
 st.markdown("### Agent Roles")
 c1, c2, c3 = st.columns(3)
@@ -329,10 +379,18 @@ if submitted:
             unsafe_allow_html=True,
         )
 
-    r1, r2, r3 = st.columns(3)
-    r1.metric("Route", result.route)
-    r2.metric("Human review required", "Yes" if result.human_review_required else "No")
-    r3.metric("Risk flags", len(result.risk_flags))
+    route_display = {
+        "guardian_tier1": "Guardian Tier-1",
+        "hunter_escalation": "Hunter escalation",
+    }.get(result.route, result.route.replace("_", " ").title())
+
+    s3, s4, s5 = st.columns(3)
+    with s3:
+        render_stat_card("Route", route_display)
+    with s4:
+        render_stat_card("Human review required", "Yes" if result.human_review_required else "No")
+    with s5:
+        render_stat_card("Risk flags", str(len(result.risk_flags)))
 
     s1, s2 = st.columns(2)
 
@@ -353,6 +411,21 @@ if submitted:
         st.write("**Tone rule:** no humiliating denial language")
         st.write(f"**Mode:** {'live CrewAI/OpenAI mode' if LIVE_LLM_MODE else 'deterministic / stable demo mode'}")
         st.write(f"**Flow state ID:** {flow_state.get('id', 'Not available')}")
+
+    st.markdown("#### Member-Friendly Explanation")
+    explanation_text = overall_explanation(result.route, result.risk_flags)
+    st.info(explanation_text)
+
+    cards = explain_risk_flags(result.risk_flags)
+    if cards:
+        explanation_cols = st.columns(2)
+        for idx, card in enumerate(cards):
+            with explanation_cols[idx % 2]:
+                st.markdown(f"### {card['title']}")
+                st.write(card["member_text"])
+                st.write(f"**Suggested next step:** {card['next_step']}")
+    else:
+        st.caption("No risk-flag explanation cards were needed for this case.")
 
     t1, t2, t3, t4 = st.tabs(
         ["Decision Path", "Agent Outputs", "Execution Trace", "Raw JSON / Download"]
@@ -487,7 +560,25 @@ if st.session_state.latest_flow_state:
             st.session_state.latest_flow_state = updated_state
             st.session_state.latest_review_action = decision
             st.session_state.latest_review_note = reviewer_note
-            st.success("Human review decision recorded. Refreshing the workflow state.")
+
+            final_result = updated_state.get("final_result", {})
+            review_packet = updated_state.get("review_packet", {})
+
+            save_review_record(
+                member_name=review_packet.get("member_name", "Unknown"),
+                county=review_packet.get("county", "Unknown"),
+                livelihood=review_packet.get("livelihood", "Unknown"),
+                amount_kes=int(review_packet.get("amount_kes", 0)),
+                route=review_packet.get("recommended_route", "unknown"),
+                risk_flags=updated_state.get("risk_flags", []),
+                reviewer_decision=decision,
+                reviewer_note=reviewer_note,
+                post_review_status=final_result.get("post_review_status", "Human review completed"),
+                flow_state=updated_state,
+                result=final_result,
+            )
+
+            st.success("Human review decision recorded and saved to reviewer history. Refreshing the workflow state.")
             st.rerun()
 
     elif flow_state.get("human_checkpoint_required"):
@@ -516,6 +607,33 @@ if st.session_state.latest_flow_state:
                 st.write(f"- {note}")
         else:
             st.write("- none")
+
+st.markdown("---")
+st.subheader("Reviewer History")
+
+history = fetch_review_history(limit=20)
+
+if history:
+    for item in history[:10]:
+        with st.expander(
+            f"#{item['id']} — {item['member_name']} — {item['reviewer_decision']} — {item['created_at']}"
+        ):
+            st.write(f"**County:** {item['county']}")
+            st.write(f"**Livelihood:** {item['livelihood']}")
+            st.write(f"**Amount:** KES {item['amount_kes']:,}")
+            st.write(f"**Route:** {item['route']}")
+            st.write(f"**Risk flags:** {', '.join(item['risk_flags']) if item['risk_flags'] else 'none'}")
+            st.write(f"**Reviewer note:** {item['reviewer_note'] or 'none'}")
+            st.write(f"**Post-review status:** {item['post_review_status']}")
+else:
+    st.caption("No reviewer history saved yet.")
+
+st.download_button(
+    label="Download reviewer history JSON",
+    data=export_review_history_json(limit=100),
+    file_name="ujima_reviewer_history.json",
+    mime="application/json",
+)
 
 st.markdown("---")
 st.caption(

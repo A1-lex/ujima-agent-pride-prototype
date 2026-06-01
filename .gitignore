@@ -3,6 +3,7 @@
 .venv/
 env/
 venv/
+.streamlit/secrets.toml
 
 # Python cache and build artifacts
 __pycache__/
@@ -20,3 +21,5 @@ __pycache__/
 # Generated prototype outputs
 output/*
 !output/.gitkeep
+__pycache__/
+data/review_history.db
