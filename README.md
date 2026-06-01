@@ -102,3 +102,6 @@ If USE_CREWAI=false, the prototype still runs in deterministic template mode.
 - case_1_tier1_market_vendor.json
 - case_2_school_fees_escalation.json
 - case_3_loan_shark_signal.json
+
+## License
+This repository is licensed under the MIT License. See [LICENSE](LICENSE) for the full text.
