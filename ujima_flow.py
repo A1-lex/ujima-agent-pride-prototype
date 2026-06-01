@@ -3,7 +3,33 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Dict, Tuple
 
-from crewai.flow.flow import Flow, listen, start
+CREWAI_FLOW_AVAILABLE = True
+CREWAI_FLOW_ERROR: Exception | None = None
+
+try:
+    from crewai.flow.flow import Flow, listen, start
+except Exception as exc:  # pragma: no cover - runtime/environment dependent
+    CREWAI_FLOW_AVAILABLE = False
+    CREWAI_FLOW_ERROR = exc
+
+    class Flow:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            self.state = {}
+
+        def kickoff(self):
+            raise RuntimeError("CrewAI Flow is unavailable in this runtime.")
+
+    def listen(*args, **kwargs):  # type: ignore[no-redef]
+        def decorator(func):
+            return func
+
+        return decorator
+
+    def start(*args, **kwargs):  # type: ignore[no-redef]
+        def decorator(func):
+            return func
+
+        return decorator
 
 from prototype import (
     PrototypeResult,
@@ -198,6 +224,30 @@ def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str,
     Preferred path: explicit CrewAI Flow.
     Safe fallback: legacy direct runner.
     """
+    if not CREWAI_FLOW_AVAILABLE:
+        fallback = legacy_run_case(case)
+        fallback_state = {
+            "id": None,
+            "trace": [
+                {
+                    "step": "flow_bootstrap",
+                    "status": "fallback",
+                    "details": f"CrewAI Flow import unavailable; fallback runner used. Reason: {CREWAI_FLOW_ERROR}",
+                }
+            ],
+            "audit_notes": [
+                "CrewAI Flow is unavailable in this runtime; deterministic fallback was used."
+            ],
+            "risk_flags": fallback.risk_flags,
+            "route": fallback.route,
+            "human_review_required": fallback.human_review_required,
+            "scout_output": fallback.scout_output,
+            "guardian_output": fallback.guardian_output,
+            "hunter_output": fallback.hunter_output,
+            "final_result": asdict(fallback),
+        }
+        return fallback, fallback_state
+
     try:
         flow = UjimaDecisionFlow(case)
         result = flow.kickoff()
