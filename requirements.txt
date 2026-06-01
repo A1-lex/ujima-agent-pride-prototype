@@ -1,2 +1,2 @@
-crewai
+streamlit
 python-dotenv

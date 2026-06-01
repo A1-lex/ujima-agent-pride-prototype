@@ -2,6 +2,18 @@
 
 A lightweight CrewAI-aligned prototype for the fictional Ujima SACCO capstone.
 
+## Deployed demo
+This repo also includes a Streamlit front end in [app.py](app.py).
+
+Run locally:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The app runs in deterministic template mode by default so it stays stable for deployment.
+
 ## What this prototype demonstrates
 - 3-agent ecosystem:
   - Scout Agent (financial literacy coach)
@@ -30,6 +42,12 @@ python prototype.py
 If you prefer `venv`, activate that environment instead and run the same command.
 
 Outputs will appear in the output/ folder.
+
+For the deployed demo, use:
+
+```bash
+streamlit run app.py
+```
 
 ## Optional CrewAI mode
 If you have a working API key and want LLM-generated outputs:
