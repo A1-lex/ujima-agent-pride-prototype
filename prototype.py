@@ -10,9 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-USE_CREWAI = os.getenv("USE_CREWAI", "false").strip().lower() == "true"
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-
 BASE_DIR = Path(__file__).parent
 CASES_DIR = BASE_DIR / "data" / "cases"
 OUTPUT_DIR = BASE_DIR / "output"
@@ -39,6 +36,23 @@ class PrototypeResult:
     guardian_output: Optional[str]
     hunter_output: Optional[str]
     human_review_required: bool
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, str(default)).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def env_str(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
+
+
+def crewai_enabled() -> bool:
+    return env_bool("USE_CREWAI", False) and bool(env_str("OPENAI_API_KEY"))
+
+
+def model_name() -> str:
+    return env_str("MODEL_NAME", "gpt-4o-mini")
 
 
 def load_case(path: Path) -> Dict[str, Any]:
@@ -135,11 +149,13 @@ def hunter_template(case: Dict[str, Any], risk_flags: List[str]) -> str:
 
 
 def maybe_run_crewai(prompt: str, role: str, goal: str, backstory: str) -> str:
-    if not USE_CREWAI:
-        raise RuntimeError("USE_CREWAI is false; using template mode.")
+    if not crewai_enabled():
+        raise RuntimeError("CrewAI mode disabled or missing OPENAI_API_KEY.")
 
     try:
-        from crewai import Agent, Crew, Process, Task
+        from crewai import Agent, Crew, Process, Task, LLM
+
+        llm = LLM(model=f"openai/{model_name()}")
 
         agent = Agent(
             role=role,
@@ -147,7 +163,7 @@ def maybe_run_crewai(prompt: str, role: str, goal: str, backstory: str) -> str:
             backstory=backstory,
             verbose=False,
             allow_delegation=False,
-            llm=MODEL_NAME,
+            llm=llm,
         )
 
         task = Task(
@@ -251,10 +267,9 @@ def run_case(case: Dict[str, Any]) -> PrototypeResult:
     if contains_distress_signal(case.get("message", "")):
         scout_output = run_scout(case)
 
-    if route == "guardian_tier1":
-        guardian_output = run_guardian(case, risk_flags)
-    else:
-        guardian_output = run_guardian(case, risk_flags)
+    guardian_output = run_guardian(case, risk_flags)
+
+    if route != "guardian_tier1":
         hunter_output = run_hunter(case, risk_flags)
         human_review_required = True
 

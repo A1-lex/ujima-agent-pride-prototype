@@ -14,6 +14,14 @@ streamlit run app.py
 
 The app runs in deterministic template mode by default so it stays stable for deployment.
 
+To enable live CrewAI/OpenAI outputs on Streamlit Community Cloud, add these secrets in the app settings:
+
+```toml
+OPENAI_API_KEY = "your_real_key_here"
+MODEL_NAME = "gpt-4o-mini"
+USE_CREWAI = true
+```
+
 ## What this prototype demonstrates
 - 3-agent ecosystem:
   - Scout Agent (financial literacy coach)

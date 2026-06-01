@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 
 import streamlit as st
@@ -12,6 +13,19 @@ st.set_page_config(
     page_title="Ujima Agent Pride Demo",
     page_icon="🦁",
     layout="wide",
+)
+
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
+if "MODEL_NAME" in st.secrets:
+    os.environ["MODEL_NAME"] = st.secrets["MODEL_NAME"]
+
+os.environ["USE_CREWAI"] = str(st.secrets.get("USE_CREWAI", False)).lower()
+
+LIVE_LLM_MODE = (
+    os.environ.get("USE_CREWAI", "false").lower() == "true"
+    and bool(os.environ.get("OPENAI_API_KEY"))
 )
 
 # ---------- Styling ----------
@@ -87,6 +101,15 @@ with st.sidebar:
         "Shows a 3-agent workflow with bounded autonomy, fairness-aware routing, and human escalation."
     )
 
+    st.markdown("---")
+    st.subheader("Engine status")
+    if LIVE_LLM_MODE:
+        st.success("Live CrewAI/OpenAI mode enabled")
+        st.caption(f"Model: {os.environ.get('MODEL_NAME', 'gpt-4o-mini')}")
+    else:
+        st.info("Template fallback mode enabled")
+        st.caption("Add secrets to activate real CrewAI/OpenAI outputs.")
+
     st.markdown("**Agents**")
     st.write("• Scout — literacy & distress detection")
     st.write("• Guardian — Tier-1 triage")
@@ -121,7 +144,7 @@ st.markdown(
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Sample cases", len(sample_files))
 m2.metric("Deployment mode", "Live")
-m3.metric("Current engine", "Template mode")
+m3.metric("Current engine", "CrewAI / OpenAI" if LIVE_LLM_MODE else "Template mode")
 m4.metric("Human override", "Enabled")
 
 st.markdown("### Agent Roles")
@@ -304,7 +327,7 @@ if submitted:
         st.write("**Distress rule:** distress triggers escalation")
         st.write("**Welfare rule:** sensitive cases require human review")
         st.write("**Tone rule:** no humiliating denial language")
-        st.write("**Mode:** deterministic / stable demo mode")
+        st.write(f"**Mode:** {'live CrewAI/OpenAI mode' if LIVE_LLM_MODE else 'deterministic / stable demo mode'}")
 
     t1, t2, t3 = st.tabs(["Decision Path", "Agent Outputs", "Raw JSON / Download"])
 
