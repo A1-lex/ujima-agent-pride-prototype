@@ -7,7 +7,7 @@ from dataclasses import asdict
 import streamlit as st
 
 from prototype import CASES_DIR, load_case
-from ujima_flow import run_case_with_flow
+from ujima_flow import apply_human_review_decision, run_case_with_flow
 
 
 st.set_page_config(
@@ -28,6 +28,21 @@ LIVE_LLM_MODE = (
     os.environ.get("USE_CREWAI", "false").lower() == "true"
     and bool(os.environ.get("OPENAI_API_KEY"))
 )
+
+if "latest_result" not in st.session_state:
+    st.session_state.latest_result = None
+
+if "latest_flow_state" not in st.session_state:
+    st.session_state.latest_flow_state = None
+
+if "latest_member_name" not in st.session_state:
+    st.session_state.latest_member_name = None
+
+if "latest_review_action" not in st.session_state:
+    st.session_state.latest_review_action = None
+
+if "latest_review_note" not in st.session_state:
+    st.session_state.latest_review_note = None
 
 # ---------- Styling ----------
 st.markdown(
@@ -122,6 +137,7 @@ with st.sidebar:
     st.write("• Distress triggers escalation")
     st.write("• High-stakes cases require human review")
     st.write("• Non-shaming communication only")
+    st.write("• Escalated cases can pause for human checkpoint review")
 
 sample = load_case(sample_files[sample_choice]) if use_sample else {}
 
@@ -294,6 +310,12 @@ if submitted:
     result, flow_state = run_case_with_flow(case)
     result_dict = asdict(result)
 
+    st.session_state.latest_result = result_dict
+    st.session_state.latest_flow_state = flow_state
+    st.session_state.latest_member_name = member_name
+    st.session_state.latest_review_action = None
+    st.session_state.latest_review_note = None
+
     st.subheader("Decision Summary")
 
     if result.route == "guardian_tier1":
@@ -415,6 +437,85 @@ if submitted:
             file_name=f"{member_name.lower().replace(' ', '_')}_ujima_flow_state.json",
             mime="application/json",
         )
+
+if st.session_state.latest_flow_state:
+    flow_state = st.session_state.latest_flow_state
+    latest_result = st.session_state.latest_result or {}
+
+    if flow_state.get("human_checkpoint_required") and flow_state.get("human_checkpoint_status") == "awaiting_review":
+        st.markdown("## Human Review Checkpoint")
+        st.warning("This case requires a human checkpoint before the workflow can be considered complete.")
+
+        review_packet = flow_state.get("review_packet", {})
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("### Review Packet")
+            st.write(f"**Member:** {review_packet.get('member_name', 'Unknown')}")
+            st.write(f"**County:** {review_packet.get('county', 'Unknown')}")
+            st.write(f"**Livelihood:** {review_packet.get('livelihood', 'Unknown')}")
+            st.write(f"**Amount:** KES {review_packet.get('amount_kes', 0):,}")
+        with c2:
+            st.markdown("### Escalation Reasoning")
+            st.write(f"**Recommended route:** {review_packet.get('recommended_route', 'n/a')}")
+            st.write(f"**Reason:** {review_packet.get('reason', 'n/a')}")
+            risk_flags = review_packet.get("risk_flags", [])
+            st.write(f"**Risk flags:** {', '.join(risk_flags) if risk_flags else 'none'}")
+
+        with st.form("human_review_form"):
+            decision = st.radio(
+                "Reviewer decision",
+                [
+                    "approve_for_human_queue",
+                    "return_for_more_information",
+                    "reject_recommendation",
+                ],
+                help="This simulates the PRIDE pause-point / human review checkpoint.",
+            )
+            reviewer_note = st.text_area(
+                "Reviewer note",
+                placeholder="Example: Escalate to officer Sarah due to school-fee timing mismatch and welfare sensitivity.",
+            )
+            review_submit = st.form_submit_button("Submit Human Review Decision")
+
+        if review_submit:
+            updated_state = apply_human_review_decision(
+                flow_state=flow_state,
+                decision=decision,
+                reviewer_note=reviewer_note,
+            )
+            st.session_state.latest_flow_state = updated_state
+            st.session_state.latest_review_action = decision
+            st.session_state.latest_review_note = reviewer_note
+            st.success("Human review decision recorded. Refreshing the workflow state.")
+            st.rerun()
+
+    elif flow_state.get("human_checkpoint_required"):
+        st.markdown("## Human Review Outcome")
+        final_result = flow_state.get("final_result", {})
+        st.success("Human checkpoint completed.")
+
+        st.write(f"**Decision:** {flow_state.get('human_checkpoint_status', 'unknown')}")
+        st.write(f"**Reviewer note:** {flow_state.get('human_checkpoint_feedback', 'none')}")
+        st.write(f"**Post-review status:** {final_result.get('post_review_status', 'n/a')}")
+
+        st.markdown("### Updated Trace")
+        trace = flow_state.get("trace", [])
+        if trace:
+            for i, item in enumerate(trace, start=1):
+                st.write(f"**{i}. {item.get('step', 'step')}**")
+                st.write(f"- status: {item.get('status', 'unknown')}")
+                st.write(f"- details: {item.get('details', '')}")
+        else:
+            st.write("No trace available.")
+
+        st.markdown("### Updated Audit Notes")
+        audit_notes = flow_state.get("audit_notes", [])
+        if audit_notes:
+            for note in audit_notes:
+                st.write(f"- {note}")
+        else:
+            st.write("- none")
 
 st.markdown("---")
 st.caption(

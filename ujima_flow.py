@@ -78,6 +78,10 @@ class UjimaDecisionFlow(Flow):
         self.state["guardian_output"] = None
         self.state["hunter_output"] = None
         self.state["consent_missing"] = not bool(case.get("consent_status", False))
+        self.state["human_checkpoint_required"] = False
+        self.state["human_checkpoint_status"] = "not_started"
+        self.state["human_checkpoint_feedback"] = None
+        self.state["review_packet"] = None
 
         self._trace(
             "intake",
@@ -171,6 +175,17 @@ class UjimaDecisionFlow(Flow):
             hunter_output = hunter_agent_output(case, self.state["risk_flags"])
             self.state["hunter_output"] = hunter_output
             self.state["human_review_required"] = True
+            self.state["human_checkpoint_required"] = True
+            self.state["human_checkpoint_status"] = "awaiting_review"
+            self.state["review_packet"] = {
+                "member_name": case.get("member_name"),
+                "county": case.get("county"),
+                "livelihood": case.get("livelihood"),
+                "amount_kes": case.get("amount_kes"),
+                "risk_flags": self.state.get("risk_flags", []),
+                "recommended_route": "human_review_queue",
+                "reason": "Escalated due to policy/risk/welfare sensitivity.",
+            }
 
             self._trace(
                 "hunter",
@@ -219,6 +234,51 @@ class UjimaDecisionFlow(Flow):
         return asdict(result)
 
 
+def apply_human_review_decision(
+    flow_state: Dict[str, Any],
+    decision: str,
+    reviewer_note: str,
+) -> Dict[str, Any]:
+    updated = dict(flow_state)
+
+    trace = list(updated.get("trace", []))
+    audit_notes = list(updated.get("audit_notes", []))
+
+    updated["human_checkpoint_status"] = decision
+    updated["human_checkpoint_feedback"] = reviewer_note
+
+    trace.append(
+        {
+            "step": "human_review_checkpoint",
+            "status": "completed",
+            "details": f"Decision={decision}; note={reviewer_note or 'none'}",
+        }
+    )
+
+    audit_notes.append(f"Human reviewer decision: {decision}")
+    if reviewer_note:
+        audit_notes.append(f"Human reviewer note: {reviewer_note}")
+
+    updated["trace"] = trace
+    updated["audit_notes"] = audit_notes
+
+    final_result = dict(updated.get("final_result", {}))
+    final_result["human_reviewer_decision"] = decision
+    final_result["human_reviewer_note"] = reviewer_note
+
+    if decision == "approve_for_human_queue":
+        final_result["post_review_status"] = "Queued for officer review"
+    elif decision == "return_for_more_information":
+        final_result["post_review_status"] = "Returned for more information"
+    elif decision == "reject_recommendation":
+        final_result["post_review_status"] = "AI recommendation rejected by human reviewer"
+    else:
+        final_result["post_review_status"] = "Human review completed"
+
+    updated["final_result"] = final_result
+    return updated
+
+
 def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str, Any]]:
     """
     Preferred path: explicit CrewAI Flow.
@@ -226,6 +286,7 @@ def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str,
     """
     if not CREWAI_FLOW_AVAILABLE:
         fallback = legacy_run_case(case)
+        human_checkpoint_required = fallback.route != "guardian_tier1"
         fallback_state = {
             "id": None,
             "trace": [
@@ -244,6 +305,18 @@ def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str,
             "scout_output": fallback.scout_output,
             "guardian_output": fallback.guardian_output,
             "hunter_output": fallback.hunter_output,
+            "human_checkpoint_required": human_checkpoint_required,
+            "human_checkpoint_status": "awaiting_review" if human_checkpoint_required else "not_started",
+            "human_checkpoint_feedback": None,
+            "review_packet": {
+                "member_name": case.get("member_name"),
+                "county": case.get("county"),
+                "livelihood": case.get("livelihood"),
+                "amount_kes": case.get("amount_kes"),
+                "risk_flags": fallback.risk_flags,
+                "recommended_route": "human_review_queue" if human_checkpoint_required else "tier1_complete",
+                "reason": "Fallback state generated for Streamlit HITL layer.",
+            },
             "final_result": asdict(fallback),
         }
         return fallback, fallback_state
@@ -261,6 +334,7 @@ def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str,
 
     except Exception as e:
         fallback = legacy_run_case(case)
+        human_checkpoint_required = fallback.route != "guardian_tier1"
         fallback_state = {
             "id": None,
             "trace": [
@@ -279,6 +353,18 @@ def run_case_with_flow(case: Dict[str, Any]) -> Tuple[PrototypeResult, Dict[str,
             "scout_output": fallback.scout_output,
             "guardian_output": fallback.guardian_output,
             "hunter_output": fallback.hunter_output,
+            "human_checkpoint_required": human_checkpoint_required,
+            "human_checkpoint_status": "awaiting_review" if human_checkpoint_required else "not_started",
+            "human_checkpoint_feedback": None,
+            "review_packet": {
+                "member_name": case.get("member_name"),
+                "county": case.get("county"),
+                "livelihood": case.get("livelihood"),
+                "amount_kes": case.get("amount_kes"),
+                "risk_flags": fallback.risk_flags,
+                "recommended_route": "human_review_queue" if human_checkpoint_required else "tier1_complete",
+                "reason": "Fallback state generated after Flow execution failure.",
+            },
             "final_result": asdict(fallback),
         }
         return fallback, fallback_state

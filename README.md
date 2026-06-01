@@ -22,6 +22,20 @@ You can also run the sample evaluator locally:
 python evaluate_flow.py
 ```
 
+## Human-in-the-loop checkpoint
+The deployed demo includes a Streamlit-based human review checkpoint for escalated cases.
+
+What it does:
+- cases that require escalation surface a review packet
+- a human reviewer can choose:
+  - `approve_for_human_queue`
+  - `return_for_more_information`
+  - `reject_recommendation`
+- the workflow trace and audit notes are updated in the UI
+
+Why this matters:
+This demonstrates the PRIDE-style pause point from the capstone, even when the app is running in a public web demo environment.
+
 To enable live CrewAI/OpenAI outputs on Streamlit Community Cloud, add these secrets in the app settings:
 
 ```toml
