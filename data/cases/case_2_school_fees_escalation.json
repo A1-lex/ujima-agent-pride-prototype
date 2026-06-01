@@ -1,0 +1,15 @@
+{
+  "member_name": "Grace",
+  "county": "Busia",
+  "livelihood": "maize farmer",
+  "product_type": "school fees support",
+  "amount_kes": 28000,
+  "children_under_5": 1,
+  "current_savings_kes": 3000,
+  "income_variance": "high",
+  "next_income_peak": "October/November",
+  "transaction_pattern": "seasonal inflows with large post-harvest spikes",
+  "repayment_history": "good",
+  "consent_status": true,
+  "message": "School fees zimefika and I need help before next harvest."
+}
