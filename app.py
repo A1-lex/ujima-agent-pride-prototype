@@ -14,24 +14,166 @@ st.set_page_config(
     layout="wide",
 )
 
-sample_files = {path.name: path for path in sorted(CASES_DIR.glob("*.json"))}
-
-st.title("Ujima Agent Pride Demo")
-st.caption("A simple deployed demo for the fictional Ujima SACCO capstone.")
-
-st.info(
-    "This demo shows a 3-agent workflow: Scout (literacy/distress detection), "
-    "Guardian (Tier-1 triage), and Hunter (human-review coordination). "
-    "It runs in deterministic template mode by default for stable deployment."
+# ---------- Styling ----------
+st.markdown(
+    """
+    <style>
+    .hero {
+        padding: 1.2rem 1.4rem;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #0F766E 0%, #115E59 100%);
+        color: white;
+        margin-bottom: 1rem;
+    }
+    .card {
+        background: #ffffff;
+        padding: 1rem;
+        border-radius: 14px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        margin-bottom: 0.8rem;
+    }
+    .agent-scout {
+        border-left: 6px solid #16A34A;
+    }
+    .agent-guardian {
+        border-left: 6px solid #D97706;
+    }
+    .agent-hunter {
+        border-left: 6px solid #1D4ED8;
+    }
+    .route-ok {
+        background: #ECFDF5;
+        color: #065F46;
+        padding: 0.9rem 1rem;
+        border-radius: 12px;
+        border: 1px solid #A7F3D0;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    .route-escalate {
+        background: #FFF7ED;
+        color: #9A3412;
+        padding: 0.9rem 1rem;
+        border-radius: 12px;
+        border: 1px solid #FDBA74;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    .small-note {
+        font-size: 0.92rem;
+        color: #4B5563;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
+sample_files = {path.name: path for path in sorted(CASES_DIR.glob("*.json"))}
+
+# ---------- Sidebar ----------
 with st.sidebar:
-    st.header("Demo Controls")
-    sample_choice = st.selectbox("Load a sample case", ["Custom"] + list(sample_files.keys()))
+    st.title("Demo Controls")
+    sample_choice = st.selectbox(
+        "Load a sample case",
+        ["Custom"] + list(sample_files.keys()),
+    )
     use_sample = sample_choice != "Custom"
+
+    st.markdown("---")
+    st.subheader("About this demo")
+    st.caption(
+        "Fictional Kenyan SACCO case. "
+        "Shows a 3-agent workflow with bounded autonomy, fairness-aware routing, and human escalation."
+    )
+
+    st.markdown("**Agents**")
+    st.write("• Scout — literacy & distress detection")
+    st.write("• Guardian — Tier-1 triage")
+    st.write("• Hunter — human-review coordination")
+
+    st.markdown("---")
+    st.subheader("Safety defaults")
+    st.write("• No occupation-only decisions")
+    st.write("• Distress triggers escalation")
+    st.write("• High-stakes cases require human review")
+    st.write("• Non-shaming communication only")
 
 sample = load_case(sample_files[sample_choice]) if use_sample else {}
 
+# ---------- Header ----------
+st.markdown(
+    """
+    <div class="hero">
+        <h1 style="margin-bottom: 0.3rem;">Ujima Agent Pride Demo</h1>
+        <div style="font-size: 1.05rem;">
+            A simple deployed demo of a 3-agent SACCO workflow:
+            <b>Scout</b> → <b>Guardian</b> → <b>Hunter</b>
+        </div>
+        <div style="margin-top: 0.5rem; opacity: 0.95;">
+            Focus: fair triage, distress detection, human-in-the-loop escalation, and dignity-preserving outputs
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Sample cases", len(sample_files))
+m2.metric("Deployment mode", "Live")
+m3.metric("Current engine", "Template mode")
+m4.metric("Human override", "Enabled")
+
+st.markdown("### Agent Roles")
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    st.markdown(
+        """
+        <div class="card agent-scout">
+            <h4>Scout Agent</h4>
+            <p>Financial literacy coach and early distress detector.</p>
+            <p class="small-note">Looks for signals like school-fee stress, loan-shark mention, or panic language.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with c2:
+    st.markdown(
+        """
+        <div class="card agent-guardian">
+            <h4>Guardian Agent</h4>
+            <p>Bounded Tier-1 triage agent.</p>
+            <p class="small-note">Handles lower-risk screening while checking seasonality, affordability, and risk flags.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with c3:
+    st.markdown(
+        """
+        <div class="card agent-hunter">
+            <h4>Hunter Agent</h4>
+            <p>Human-in-the-loop coordinator.</p>
+            <p class="small-note">Prepares briefing support for complex or welfare-sensitive cases without making the final decision.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with st.expander("How this workflow maps to the capstone"):
+    st.write(
+        """
+        - Scout handles literacy support and catches distress signals early.
+        - Guardian performs first-pass triage for lower-risk cases.
+        - Hunter takes over when the case is high-value, complex, or welfare-sensitive.
+        - A human officer remains accountable for escalated outcomes.
+        """
+    )
+
+# ---------- Form ----------
 with st.form("ujima_case_form"):
     st.subheader("Member Case Input")
 
@@ -87,7 +229,7 @@ with st.form("ujima_case_form"):
             "transaction_pattern",
             "weekly inflows, stronger during harvest-linked trade periods",
         ),
-        height=100,
+        height=90,
     )
 
     message = st.text_area(
@@ -96,13 +238,17 @@ with st.form("ujima_case_form"):
             "message",
             "Nataka mkopo wa school fees lakini naweza lipa kidogo kidogo bila stress.",
         ),
-        height=100,
+        height=90,
     )
 
-    consent_status = st.checkbox("Member consent confirmed", value=bool(sample.get("consent_status", True)))
+    consent_status = st.checkbox(
+        "Member consent confirmed",
+        value=bool(sample.get("consent_status", True)),
+    )
 
     submitted = st.form_submit_button("Run Agent Pride Demo")
 
+# ---------- Results ----------
 if submitted:
     case = {
         "member_name": member_name,
@@ -125,60 +271,95 @@ if submitted:
 
     st.subheader("Decision Summary")
 
-    col_route, col_review, col_flags = st.columns(3)
-    with col_route:
-        st.metric("Route", result.route)
-    with col_review:
-        st.metric("Human review required", "Yes" if result.human_review_required else "No")
-    with col_flags:
-        st.metric("Risk flags", len(result.risk_flags))
-
     if result.route == "guardian_tier1":
-        st.success("This case stayed within bounded Tier-1 triage.")
+        st.markdown(
+            '<div class="route-ok">Route result: Guardian handled this as a bounded Tier-1 case.</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.warning("This case escalated for human-in-the-loop review.")
+        st.markdown(
+            '<div class="route-escalate">Route result: This case escalated for human-in-the-loop review.</div>',
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("### Risk Flags")
-    if result.risk_flags:
-        for flag in result.risk_flags:
-            st.write(f"- {flag}")
-    else:
-        st.write("- none")
+    r1, r2, r3 = st.columns(3)
+    r1.metric("Route", result.route)
+    r2.metric("Human review required", "Yes" if result.human_review_required else "No")
+    r3.metric("Risk flags", len(result.risk_flags))
 
-    tab_scout, tab_guardian, tab_hunter, tab_raw = st.tabs(
-        ["Scout Output", "Guardian Output", "Hunter Output", "Raw JSON"]
-    )
+    s1, s2 = st.columns(2)
 
-    with tab_scout:
+    with s1:
+        st.markdown("#### Member Snapshot")
+        st.write(f"**Name:** {member_name}")
+        st.write(f"**County:** {county}")
+        st.write(f"**Livelihood:** {livelihood}")
+        st.write(f"**Requested amount:** KES {amount_kes:,}")
+        st.write(f"**Children under 5:** {children_under_5}")
+        st.write(f"**Consent status:** {'Confirmed' if consent_status else 'Missing'}")
+
+    with s2:
+        st.markdown("#### Governance Snapshot")
+        st.write("**Proxy rule:** occupation cannot be used alone")
+        st.write("**Distress rule:** distress triggers escalation")
+        st.write("**Welfare rule:** sensitive cases require human review")
+        st.write("**Tone rule:** no humiliating denial language")
+        st.write("**Mode:** deterministic / stable demo mode")
+
+    t1, t2, t3 = st.tabs(["Decision Path", "Agent Outputs", "Raw JSON / Download"])
+
+    with t1:
+        st.markdown("#### Workflow Path")
+
+        scout_triggered = bool(result.scout_output)
+        guardian_ran = bool(result.guardian_output)
+        hunter_ran = bool(result.hunter_output)
+
+        if scout_triggered:
+            st.info("Step 1 — Scout engaged because the case contained a distress or support signal.")
+        else:
+            st.write("Step 1 — Scout did not need to send a direct message for this case.")
+
+        if guardian_ran:
+            st.success("Step 2 — Guardian performed Tier-1 triage and generated a bounded recommendation.")
+
+        if hunter_ran:
+            st.warning("Step 3 — Hunter prepared the case for human review.")
+        else:
+            st.write("Step 3 — No Hunter escalation was needed.")
+
+        st.markdown("#### Risk Flags")
+        if result.risk_flags:
+            for flag in result.risk_flags:
+                st.write(f"- {flag}")
+        else:
+            st.write("- none")
+
+    with t2:
         if result.scout_output:
+            st.markdown("#### Scout Output")
             st.code(result.scout_output, language="text")
-        else:
-            st.write("No Scout message was needed for this case.")
 
-    with tab_guardian:
         if result.guardian_output:
+            st.markdown("#### Guardian Output")
             st.code(result.guardian_output, language="text")
-        else:
-            st.write("No Guardian output available.")
 
-    with tab_hunter:
         if result.hunter_output:
+            st.markdown("#### Hunter Output")
             st.code(result.hunter_output, language="text")
-        else:
-            st.write("No Hunter escalation was needed for this case.")
 
-    with tab_raw:
+    with t3:
         st.json(result_dict)
 
-    st.download_button(
-        label="Download result JSON",
-        data=json.dumps(result_dict, indent=2, ensure_ascii=False),
-        file_name=f"{member_name.lower().replace(' ', '_')}_ujima_result.json",
-        mime="application/json",
-    )
+        st.download_button(
+            label="Download result JSON",
+            data=json.dumps(result_dict, indent=2, ensure_ascii=False),
+            file_name=f"{member_name.lower().replace(' ', '_')}_ujima_result.json",
+            mime="application/json",
+        )
 
 st.markdown("---")
 st.caption(
     "Case note: Ujima is a fictional Kenyan SACCO case used for instructional design. "
-    "This app is a demonstration of bounded multi-agent orchestration, not a production lending system."
+    "This app demonstrates bounded multi-agent orchestration, not a production lending system."
 )
