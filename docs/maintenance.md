@@ -49,6 +49,12 @@ These parts are tightly coupled to the demo stability story:
 - the session-state checkpoint handling
 - the SQLite database path under `data/review_history.db`
 
+## Future upgrades
+If you revisit the prototype later, the best next upgrades would be:
+- proper custom subdomain cleanup
+- native CrewAI `@human_feedback` routing
+- persistent analytics dashboard for review history
+
 ## Local storage
 Reviewer history is stored in `data/review_history.db`.
 The app also exposes JSON export from the UI for easy review and backup.

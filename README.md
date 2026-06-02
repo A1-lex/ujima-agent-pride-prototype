@@ -2,7 +2,9 @@
 
 A lightweight CrewAI-aligned prototype for the fictional Ujima SACCO capstone, now with Flow-first orchestration, Streamlit-based human review, SQLite reviewer history, and member-friendly explanation cards.
 
-## Deployed demo
+## Live Demo
+Live app: https://ujima-agent-pride-prototype-kyhlhcxanntvgrokhnvmuf.streamlit.app/
+
 This repo also includes a Streamlit front end in [app.py](app.py).
 
 Run locally:
